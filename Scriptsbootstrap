@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo ">> npm install"
+npm i
+
+echo ">> Neon provisioning"
+if [[ -n "${NEON_API_KEY:-}" ]]; then
+  node scripts/neon-setup.mjs
+else
+  echo "NEON_API_KEY no presente. Skip."
+fi
+
+echo ">> Seed"
+npm run seed || true
+
+echo ">> GitHub push"
+if [[ -n "${GITHUB_USER:-}" && -n "${GITHUB_TOKEN:-}" ]]; then
+  bash scripts/github-create-repo.sh
+else
+  echo "GITHUB_USER/GITHUB_TOKEN no presentes. Skip."
+fi
+
+echo ">> Vercel CLI"
+npm i -g vercel@latest
+
+if [[ -n "${VERCEL_TOKEN:-}" ]]; then
+  vercel link --yes --token="$VERCEL_TOKEN" || vercel --yes --token="$VERCEL_TOKEN"
+  if [[ -n "${VERCEL_PROJECT_ID:-}" ]]; then
+    node scripts/vercel-env-bulk.mjs
+  else
+    echo "VERCEL_PROJECT_ID no presente. Env no subidas por API."
+  fi
+  vercel deploy --prod --token="$VERCEL_TOKEN"
+else
+  echo "VERCEL_TOKEN no presente. Skip deploy."
+fi
+
+echo "OK"
