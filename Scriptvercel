@@ -1,0 +1,25 @@
+/**
+ * Sube variables de .env al proyecto Vercel por API.
+ * Reqs: VERCEL_TOKEN, VERCEL_PROJECT_ID
+ */
+import fs from "node:fs/promises";
+const token = process.env.VERCEL_TOKEN;
+const projectId = process.env.VERCEL_PROJECT_ID;
+if (!token || !projectId) { console.error("Faltan VERCEL_TOKEN o VERCEL_PROJECT_ID"); process.exit(1); }
+const API = "https://api.vercel.com";
+const whitelist = new Set([
+  "DATABASE_URL","UPSTASH_REDIS_REST_URL","UPSTASH_REDIS_REST_TOKEN",
+  "NEXT_PUBLIC_TURNSTILE_SITE_KEY","TURNSTILE_SECRET",
+  "RESEND_API_KEY","NOTIFY_TO","NOTIFY_FROM","RESEND_AUTOREPLY",
+  "STRIPE_SECRET_KEY","STRIPE_WEBHOOK_SECRET",
+  "NEXT_PUBLIC_PRICE_STARTER","NEXT_PUBLIC_PRICE_GROWTH","NEXT_PUBLIC_PRICE_ENTERPRISE",
+  "ADMIN_USER","ADMIN_PASS","SITE_URL"
+]);
+function parseDotEnv(text){const out={};for(const line of text.split(/\r?\n/)){const s=line.trim();if(!s||s.startsWith("#"))continue;const i=s.indexOf("=");if(i===-1)continue;const k=s.slice(0,i).trim();let v=s.slice(i+1).trim();if((v.startsWith('"')&&v.endsWith('"'))||(v.startsWith("'")&&v.endsWith("'")))v=v.slice(1,-1);out[k]=v}return out}
+async function listEnv(){const r=await fetch(`${API}/v10/projects/${projectId}/env`,{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)throw new Error("No se pudo listar env");return r.json()}
+async function delEnv(id){await fetch(`${API}/v10/projects/${projectId}/env/${id}`,{method:"DELETE",headers:{Authorization:`Bearer ${token}`}})}
+async function addEnv(key,value,target=["production","preview","development"]){const r=await fetch(`${API}/v10/projects/${projectId}/env`,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({key,value,target,type:"encrypted"})});if(!r.ok){console.error("Error add env",key,await r.text())}}
+const text=await fs.readFile(".env","utf8").catch(()=> ""); if(!text){console.error("No .env"); process.exit(1)}
+const env=parseDotEnv(text),cur=await listEnv();const byKey=new Map();for(const e of cur.envs||[]){if(!byKey.has(e.key))byKey.set(e.key,[]);byKey.get(e.key).push(e)}
+for(const [k,v] of Object.entries(env)){ if(!whitelist.has(k)) continue; for(const it of byKey.get(k)||[]) await delEnv(it.id).catch(()=>{}); await addEnv(k,v); console.log("Set",k) }
+console.log("OK");
