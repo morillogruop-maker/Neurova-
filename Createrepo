@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+: "${GITHUB_USER:?Falta GITHUB_USER}"
+: "${GITHUB_TOKEN:?Falta GITHUB_TOKEN}"
+REPO_NAME="${REPO_NAME:-neurova-group}"
+remote="https://github.com/${GITHUB_USER}/${REPO_NAME}.git"
+# Crea repo (ignora si ya existe)
+curl -sS -H "Authorization: token ${GITHUB_TOKEN}" \
+  -H "Accept: application/vnd.github+json" \
+  https://api.github.com/user/repos \
+  -d "{\"name\":\"${REPO_NAME}\",\"private\":false}" >/dev/null || true
+git init
+git checkout -B main
+git add .
+git commit -m "init"
+git remote remove origin 2>/dev/null || true
+git remote add origin "${remote}"
+git push -u origin main
+echo "Repositorio listo: ${remote}"
